@@ -63,20 +63,24 @@ local win = Lib:CreateWindow({
     size = Vector2.new(560, 400) 
 })
 
-local blatantTab = win:Tab("Blatant")
-local blatantSec = blatantTab:Section("Combat", "Left")
-local killAuraCategory = blatantSec:Category("Kill Aura")
+-- Main tab (Utility)
+local mainTab = win:Tab("Utility")
 
-local tab = win:Tab("Utility")
-local sec = tab:Section("ESP", "Left")
-local gameEsp = sec:Category("Game ESP")
-local kitEsp = sec:Category("Kit ESP")
-local itemEsp = sec:Category("Items ESP")
-local espOptions = sec:Category("Options")
+-- Section: Combat
+local combatSec = mainTab:Section("Combat", "Left")
+local killAuraCategory = combatSec:Category("Kill Aura")
 
-local autoKitSec = tab:Section("Automation", "Right")
-local autoKitCategory = autoKitSec:Category("Auto Kit")
-local autoVoidDropCategory = autoKitSec:Category("Auto Void Drop")
+-- Section: ESP
+local espSec = mainTab:Section("ESP", "Left")
+local gameEsp = espSec:Category("Game ESP")
+local kitEsp = espSec:Category("Kit ESP")
+local itemEsp = espSec:Category("Items ESP")
+local espOptions = espSec:Category("Options")
+
+-- Section: Automation
+local autoSec = mainTab:Section("Automation", "Left")
+local autoKitCategory = autoSec:Category("Auto Kit")
+local autoVoidDropCategory = autoSec:Category("Auto Void Drop")
 
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
@@ -685,6 +689,7 @@ task.spawn(function()
 end)
 
 -- UI Toggles
+-- Combat
 killAuraCategory:Toggle("Enabled", settings.Killaura, function(state) settings.Killaura = state saveConfig() end)
 killAuraCategory:Toggle("Target Entities", settings.TargetEntities, function(state) settings.TargetEntities = state saveConfig() end)
 killAuraCategory:Toggle("Team Check", settings.TeamCheck, function(state) settings.TeamCheck = state saveConfig() end)
@@ -696,14 +701,14 @@ killAuraCategory:Toggle("Face Target", settings.FaceTarget, function(state) sett
 killAuraCategory:Toggle("Limit to Items", settings.LimitToItems, function(state) settings.LimitToItems = state saveConfig() end)
 killAuraCategory:Toggle("SwingOnly", settings.SwingOnly, function(state) settings.SwingOnly = state saveConfig() end)
 
-if autoKitCategory then
-    autoKitCategory:Toggle("Enabled", settings.AutoKit, function(state) settings.AutoKit = state saveConfig() end)
-    autoKitCategory:Slider("Collection Range", settings.AutoKitRange, 5, 1, 20, function(value) settings.AutoKitRange = value saveConfig() end)
-end
+-- Automation
+autoKitCategory:Toggle("Enabled", settings.AutoKit, function(state) settings.AutoKit = state saveConfig() end)
+autoKitCategory:Slider("Collection Range", settings.AutoKitRange, 5, 1, 20, function(value) settings.AutoKitRange = value saveConfig() end)
 
 autoVoidDropCategory:Toggle("Enabled", settings.AutoVoidDrop, function(state) settings.AutoVoidDrop = state saveConfig() end)
 autoVoidDropCategory:Toggle("Owl Check", settings.OwlCheck, function(state) settings.OwlCheck = state saveConfig() end)
 
+-- ESP
 gameEsp:Toggle("Player ESP", settings.Player, function(state) settings.Player = state saveConfig() end)
 gameEsp:Toggle("Bed ESP", settings.Bed, function(state) settings.Bed = state saveConfig() end)
 gameEsp:Toggle("Entity ESP", settings.Entity, function(state) settings.Entity = state saveConfig() end)
