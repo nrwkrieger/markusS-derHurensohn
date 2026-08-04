@@ -1,6 +1,13 @@
-local Lib = loadstring(game:HttpGet("https://raw.githubusercontent.com/nrwkrieger/markusS-derHurensohn/main/Libary/Lurk.lua"))() or LurkUI
+-- ============================================================
+-- Lurk UI v3 - Original Custom UI (No Library)
+-- Created by: nrwkrieger
+-- ============================================================
+
 local HttpService = game:GetService("HttpService")
 
+-- ============================================================
+-- Settings
+-- ============================================================
 local settings = {
     Player = false,
     Bed = false,
@@ -59,34 +66,523 @@ else
 end
 
 -- ============================================================
--- UI: Single Utility Tab (Combat + ESP + Automation)
+-- Custom UI Framework - Original Design
 -- ============================================================
-local win = Lib:CreateWindow({ 
-    title = "Lurk", 
-    size = Vector2.new(560, 420) 
-})
+local UI = {}
+UI.__index = UI
 
--- Utility Tab
-local utilTab = win:Tab("Utility")
+-- Color palette (purple theme)
+local C = {
+    bg = Color3.fromRGB(12, 12, 18),
+    panel = Color3.fromRGB(20, 20, 28),
+    panelHover = Color3.fromRGB(28, 28, 38),
+    border = Color3.fromRGB(45, 45, 58),
+    accent = Color3.fromRGB(139, 92, 246),    -- Purple
+    accentDim = Color3.fromRGB(100, 60, 200),
+    accentGlow = Color3.fromRGB(180, 140, 255),
+    text = Color3.fromRGB(235, 235, 240),
+    textDim = Color3.fromRGB(150, 150, 165),
+    textDark = Color3.fromRGB(80, 80, 95),
+    shadow = Color3.fromRGB(0, 0, 0),
+    success = Color3.fromRGB(80, 220, 150),
+    danger = Color3.fromRGB(230, 60, 80),
+}
 
--- Section: Combat (left)
-local combatSec = utilTab:Section("Combat", "Left")
-local killAuraCategory = combatSec:Category("Kill Aura")
+-- Drawing helpers
+local function rect(x, y, w, h, color, filled, thick)
+    local o = Drawing.new("Square")
+    o.Position = Vector2.new(x, y)
+    o.Size = Vector2.new(w, h)
+    o.Color = color
+    o.Filled = filled == nil and true or filled
+    o.Thickness = thick or 1
+    o.Visible = false
+    o.ZIndex = 1
+    return o
+end
 
--- Section: ESP (left)
-local espSec = utilTab:Section("ESP", "Left")
-local gameEsp = espSec:Category("Game ESP")
-local kitEsp = espSec:Category("Kit ESP")
-local itemEsp = espSec:Category("Items ESP")
-local espOptions = espSec:Category("Options")
+local function txt(x, y, text, size, color, center, outline)
+    local o = Drawing.new("Text")
+    o.Position = Vector2.new(x, y)
+    o.Text = text or ""
+    o.Size = size or 12
+    o.Color = color or C.text
+    o.Center = center or false
+    o.Outline = outline or false
+    o.Visible = false
+    o.ZIndex = 1
+    o.Font = 3 -- Smooth
+    return o
+end
 
--- Section: Automation (left)
-local autoSec = utilTab:Section("Automation", "Left")
-local autoKitCategory = autoSec:Category("Auto Kit")
-local autoVoidDropCategory = autoSec:Category("Auto Void Drop")
+local function line(x1, y1, x2, y2, color, thick)
+    local o = Drawing.new("Line")
+    o.From = Vector2.new(x1, y1)
+    o.To = Vector2.new(x2, y2)
+    o.Color = color or C.border
+    o.Thickness = thick or 1
+    o.Visible = false
+    o.ZIndex = 1
+    return o
+end
+
+local function circ(x, y, r, color, filled, thick)
+    local o = Drawing.new("Circle")
+    o.Position = Vector2.new(x, y)
+    o.Radius = r or 6
+    o.Color = color or C.accent
+    o.Filled = filled == nil and true or filled
+    o.Thickness = thick or 1
+    o.Visible = false
+    o.ZIndex = 1
+    return o
+end
+
+local function roundRect(x, y, w, h, r, color, filled)
+    -- Simplified: just use a square with border-radius approximation
+    -- In drawing library we use square + circles for corners
+    local objects = {}
+    local main = rect(x + r, y, w - r * 2, h, color, filled)
+    local main2 = rect(x, y + r, w, h - r * 2, color, filled)
+    local c1 = circ(x + r, y + r, r, color, filled)
+    local c2 = circ(x + w - r, y + r, r, color, filled)
+    local c3 = circ(x + r, y + h - r, r, color, filled)
+    local c4 = circ(x + w - r, y + h - r, r, color, filled)
+    table.insert(objects, main)
+    table.insert(objects, main2)
+    table.insert(objects, c1)
+    table.insert(objects, c2)
+    table.insert(objects, c3)
+    table.insert(objects, c4)
+    return objects
+end
+
+local function lerp(a, b, t)
+    return a + (b - a) * t
+end
+
+local function lerpColor(c1, c2, t)
+    return Color3.new(lerp(c1.R, c2.R, t), lerp(c1.G, c2.G, t), lerp(c1.B, c2.B, t))
+end
+
+local function isInRect(mx, my, x, y, w, h)
+    return mx >= x and mx <= x + w and my >= y and my <= y + h
+end
+
+-- Main UI Object
+function UI:CreateWindow(title, width, height)
+    local win = {
+        title = title or "Lurk",
+        w = width or 480,
+        h = height or 420,
+        x = 120,
+        y = 120,
+        visible = true,
+        drag = false,
+        dragOff = Vector2.new(0, 0),
+        toggleKey = 0xA1,
+        lastKeyState = false,
+        scrollOffset = 0,
+        maxScroll = 0,
+        objects = {},
+        sections = {},
+        elements = {},
+    }
+
+    -- Window frame
+    local bgParts = roundRect(win.x, win.y, win.w, win.h, 12, C.bg, true)
+    for _, obj in ipairs(bgParts) do
+        table.insert(win.objects, obj)
+    end
+    local borderParts = roundRect(win.x, win.y, win.w, win.h, 12, C.border, false)
+    for _, obj in ipairs(borderParts) do
+        table.insert(win.objects, obj)
+    end
+
+    -- Title bar
+    local titleBg = rect(win.x + 12, win.y + 12, win.w - 24, 28, C.panel, true)
+    table.insert(win.objects, titleBg)
+    win.titleText = txt(win.x + 22, win.y + 18, win.title, 16, C.text, false, true)
+    table.insert(win.objects, win.titleText)
+
+    -- Accent line under title
+    local accLine = line(win.x + 22, win.y + 40, win.x + win.w - 22, win.y + 40, C.accent, 2)
+    table.insert(win.objects, accLine)
+
+    -- Content area background
+    local contentBg = rect(win.x + 14, win.y + 48, win.w - 28, win.h - 70, C.panel, true)
+    table.insert(win.objects, contentBg)
+
+    -- Footer
+    local footerLine = line(win.x + 18, win.y + win.h - 18, win.x + win.w - 18, win.y + win.h - 18, C.border, 1)
+    table.insert(win.objects, footerLine)
+    local footerText = txt(win.x + 22, win.y + win.h - 26, "Lurk v3", 9, C.textDim, false, true)
+    table.insert(win.objects, footerText)
+
+    -- Scroll indicator
+    win.scrollBar = rect(win.x + win.w - 20, win.y + 52, 4, win.h - 80, C.border, true)
+    win.scrollFill = rect(win.x + win.w - 20, win.y + 52, 4, 40, C.accent, true)
+    table.insert(win.objects, win.scrollBar)
+    table.insert(win.objects, win.scrollFill)
+
+    -- Section management
+    local currentY = 60
+    local function addSection(name)
+        local sec = {
+            name = name,
+            y = currentY,
+            elements = {},
+            objects = {},
+        }
+        local yPos = win.y + currentY
+        -- Section header
+        local secTitle = txt(win.x + 26, yPos + 2, name:upper(), 11, C.accent, false, true)
+        local secLine = line(win.x + 26, yPos + 18, win.x + 180, yPos + 18, C.accent, 1)
+        table.insert(sec.objects, secTitle)
+        table.insert(sec.objects, secLine)
+        table.insert(win.objects, secTitle)
+        table.insert(win.objects, secLine)
+        currentY = currentY + 28
+
+        function sec:Toggle(label, default, callback)
+            local el = {
+                type = "toggle",
+                label = label,
+                state = default or false,
+                displayState = default and 1 or 0,
+                callback = callback,
+                y = currentY,
+                objects = {},
+            }
+            local yPos = win.y + currentY
+
+            -- Background pill
+            local pill = rect(win.x + win.w - 56, yPos + 2, 36, 18, C.bg, true)
+            local pillBorder = rect(win.x + win.w - 56, yPos + 2, 36, 18, C.border, false, 1)
+            local knob = circ(win.x + win.w - 54, yPos + 11, 7, C.textDim, true)
+
+            -- Label
+            local labelObj = txt(win.x + 26, yPos + 4, label, 12, C.text, false, true)
+
+            table.insert(el.objects, pill)
+            table.insert(el.objects, pillBorder)
+            table.insert(el.objects, knob)
+            table.insert(el.objects, labelObj)
+            table.insert(win.objects, pill)
+            table.insert(win.objects, pillBorder)
+            table.insert(win.objects, knob)
+            table.insert(win.objects, labelObj)
+
+            el.pill = pill
+            el.knob = knob
+            el.labelObj = labelObj
+
+            table.insert(sec.elements, el)
+            table.insert(win.elements, el)
+            currentY = currentY + 26
+
+            function el:Update()
+                local target = self.state and 1 or 0
+                self.displayState = lerp(self.displayState, target, 0.2)
+                local col = lerpColor(C.border, C.accent, self.displayState)
+                self.pill.Color = col
+                local knobX = self.displayState > 0.5 and (win.x + win.w - 50) or (win.x + win.w - 54)
+                self.knob.Position = Vector2.new(knobX, self.knob.Position.Y)
+                self.knob.Color = self.displayState > 0.5 and C.text or C.textDim
+            end
+
+            return el
+        end
+
+        function sec:Slider(label, default, min, step, max, callback)
+            local el = {
+                type = "slider",
+                label = label,
+                value = default or min,
+                min = min or 0,
+                max = max or 100,
+                step = step or 1,
+                callback = callback,
+                y = currentY,
+                dragging = false,
+                objects = {},
+            }
+            local yPos = win.y + currentY
+
+            local labelObj = txt(win.x + 26, yPos + 2, label .. ": " .. tostring(el.value), 12, C.text, false, true)
+            local track = rect(win.x + 26, yPos + 20, win.w - 70, 4, C.border, true)
+            local fill = rect(win.x + 26, yPos + 20, 0, 4, C.accent, true)
+            local thumb = circ(win.x + 26, yPos + 22, 7, C.text, true)
+            local thumbRing = circ(win.x + 26, yPos + 22, 9, C.accent, false, 2)
+
+            table.insert(el.objects, labelObj)
+            table.insert(el.objects, track)
+            table.insert(el.objects, fill)
+            table.insert(el.objects, thumb)
+            table.insert(el.objects, thumbRing)
+            table.insert(win.objects, labelObj)
+            table.insert(win.objects, track)
+            table.insert(win.objects, fill)
+            table.insert(win.objects, thumb)
+            table.insert(win.objects, thumbRing)
+
+            el.labelObj = labelObj
+            el.track = track
+            el.fill = fill
+            el.thumb = thumb
+            el.thumbRing = thumbRing
+
+            table.insert(sec.elements, el)
+            table.insert(win.elements, el)
+            currentY = currentY + 42
+
+            function el:Update()
+                local pct = (self.value - self.min) / (self.max - self.min)
+                local trackX = self.track.Position.X
+                local trackW = self.track.Size.X
+                self.fill.Size = Vector2.new(trackW * pct, 4)
+                local thumbX = trackX + trackW * pct
+                self.thumb.Position = Vector2.new(thumbX, self.thumb.Position.Y)
+                self.thumbRing.Position = Vector2.new(thumbX, self.thumbRing.Position.Y)
+                self.labelObj.Text = self.label .. ": " .. tostring(self.value)
+            end
+
+            return el
+        end
+
+        table.insert(win.sections, sec)
+        currentY = currentY + 8
+        win.maxScroll = math.max(win.maxScroll, currentY - win.h + 80)
+        return sec
+    end
+
+    -- ============================================================
+    -- Build UI Sections
+    -- ============================================================
+
+    -- Combat
+    local combatSec = addSection("Combat")
+    local kaCat = {}
+    kaCat.elements = {}
+    -- We'll add Kill Aura elements directly under Combat
+    local kaLabel = txt(win.x + 28, win.y + currentY + 2, "Kill Aura", 12, C.textDim, false, true)
+    table.insert(win.objects, kaLabel)
+    currentY = currentY + 20
+    kaCat.label = kaLabel
+    kaCat.y = currentY
+
+    -- Toggles and sliders inside Kill Aura
+    local function addToCat(cat, label, default, cb, isSlider, min, step, max)
+        if isSlider then
+            local sec = { elements = {} }
+            local el = sec:Slider(label, default, min, step, max, cb)
+            table.insert(cat.elements, el)
+            return el
+        else
+            local sec = { elements = {} }
+            local el = sec:Toggle(label, default, cb)
+            table.insert(cat.elements, el)
+            return el
+        end
+    end
+
+    -- Kill Aura toggles
+    local kaToggle1 = combatSec:Toggle("Enabled", settings.Killaura, function(v) settings.Killaura = v; saveConfig() end)
+    local kaToggle2 = combatSec:Toggle("Target Entities", settings.TargetEntities, function(v) settings.TargetEntities = v; saveConfig() end)
+    local kaToggle3 = combatSec:Toggle("Team Check", settings.TeamCheck, function(v) settings.TeamCheck = v; saveConfig() end)
+    local kaSlider1 = combatSec:Slider("Swing Range", settings.SwingRange, 1, 1, 28, function(v) settings.SwingRange = v; saveConfig() end)
+    local kaSlider2 = combatSec:Slider("Max Angle", settings.AngleValue, 1, 1, 360, function(v) settings.AngleValue = v; saveConfig() end)
+    local kaToggle4 = combatSec:Toggle("Require Mouse Down", settings.RequireMouseDown, function(v) settings.RequireMouseDown = v; saveConfig() end)
+    local kaToggle5 = combatSec:Toggle("No Swing", settings.NoSwing, function(v) settings.NoSwing = v; saveConfig() end)
+    local kaToggle6 = combatSec:Toggle("Face Target", settings.FaceTarget, function(v) settings.FaceTarget = v; saveConfig() end)
+    local kaToggle7 = combatSec:Toggle("Limit to Items", settings.LimitToItems, function(v) settings.LimitToItems = v; saveConfig() end)
+    local kaToggle8 = combatSec:Toggle("SwingOnly", settings.SwingOnly, function(v) settings.SwingOnly = v; saveConfig() end)
+
+    -- ESP
+    local espSec = addSection("ESP")
+    local espGame = espSec:Toggle("Player ESP", settings.Player, function(v) settings.Player = v; saveConfig() end)
+    local espBed = espSec:Toggle("Bed ESP", settings.Bed, function(v) settings.Bed = v; saveConfig() end)
+    local espEntity = espSec:Toggle("Entity ESP", settings.Entity, function(v) settings.Entity = v; saveConfig() end)
+    local espKit = espSec:Toggle("Show Kit", settings.ShowKit, function(v) settings.ShowKit = v; saveConfig() end)
+    local espEquipped = espSec:Toggle("Show Equipped", settings.ShowEquipped, function(v) settings.ShowEquipped = v; saveConfig() end)
+
+    -- Kit ESP
+    local kitEspLabel = txt(win.x + 30, win.y + currentY + 2, "─ Kit ESP", 11, C.textDim, false, true)
+    table.insert(win.objects, kitEspLabel)
+    currentY = currentY + 20
+    local metalEsp = espSec:Toggle("Metal ESP", settings.Metal, function(v) settings.Metal = v; saveConfig() end)
+    local beeEsp = espSec:Toggle("Bee ESP", settings.Bee, function(v) settings.Bee = v; saveConfig() end)
+    local elderEsp = espSec:Toggle("Eldertree ESP", settings.Eldertree, function(v) settings.Eldertree = v; saveConfig() end)
+    local starEsp = espSec:Toggle("Star ESP", settings.Star, function(v) settings.Star = v; saveConfig() end)
+
+    -- Items ESP
+    local itemsEspLabel = txt(win.x + 30, win.y + currentY + 2, "─ Items ESP", 11, C.textDim, false, true)
+    table.insert(win.objects, itemsEspLabel)
+    currentY = currentY + 20
+    local ironEsp = espSec:Toggle("Iron ESP", settings.iron, function(v) settings.iron = v; saveConfig() end)
+    local diamondEsp = espSec:Toggle("Diamond ESP", settings.diamond, function(v) settings.diamond = v; saveConfig() end)
+    local emeraldEsp = espSec:Toggle("Emerald ESP", settings.emerald, function(v) settings.emerald = v; saveConfig() end)
+    local showAmount = espSec:Toggle("Show Amount", settings.Amount, function(v) settings.Amount = v; saveConfig() end)
+
+    -- ESP Options
+    local espOptLabel = txt(win.x + 30, win.y + currentY + 2, "─ Options", 11, C.textDim, false, true)
+    table.insert(win.objects, espOptLabel)
+    currentY = currentY + 20
+    local visibleOnly = espSec:Toggle("Visible Only", settings.Visible, function(v) settings.Visible = v; saveConfig() end)
+    local distSlider = espSec:Slider("Distance", settings.Distance, 100, 10, 2000, function(v) settings.Distance = v; saveConfig() end)
+
+    -- Automation
+    local autoSec = addSection("Automation")
+    local autoKit = autoSec:Toggle("Auto Kit", settings.AutoKit, function(v) settings.AutoKit = v; saveConfig() end)
+    local kitRange = autoSec:Slider("Collection Range", settings.AutoKitRange, 5, 1, 20, function(v) settings.AutoKitRange = v; saveConfig() end)
+    local autoVoid = autoSec:Toggle("Auto Void Drop", settings.AutoVoidDrop, function(v) settings.AutoVoidDrop = v; saveConfig() end)
+    local owlCheck = autoSec:Toggle("Owl Check", settings.OwlCheck, function(v) settings.OwlCheck = v; saveConfig() end)
+
+    -- Store elements for update loop
+    win.allElements = {}
+    for _, sec in ipairs(win.sections) do
+        for _, el in ipairs(sec.elements) do
+            table.insert(win.allElements, el)
+        end
+    end
+
+    -- ============================================================
+    -- Main Render Loop
+    -- ============================================================
+    task.spawn(function()
+        local lastMouse = false
+        while true do
+            local keyPressed = iskeypressed(win.toggleKey)
+            if keyPressed and not win.lastKeyState then
+                win.visible = not win.visible
+                for _, obj in ipairs(win.objects) do
+                    obj.Visible = win.visible
+                end
+            end
+            win.lastKeyState = keyPressed
+
+            if not win.visible then
+                task.wait()
+                continue
+            end
+
+            local mx, my = getMousePos()
+            local mouseDown = ismouse1pressed()
+            local clicked = mouseDown and not lastMouse
+
+            -- Drag
+            if clicked and isInRect(mx, my, win.x, win.y, win.w, 40) then
+                win.drag = true
+                win.dragOff = Vector2.new(mx - win.x, my - win.y)
+            end
+            if not mouseDown then
+                win.drag = false
+            end
+            if win.drag then
+                win.x = mx - win.dragOff.X
+                win.y = my - win.dragOff.Y
+                -- Update positions of all objects
+                -- We'll just let the loop update them
+            end
+
+            -- Update UI positions and interactions
+            local offsetY = win.scrollOffset
+            local contentY = win.y + 48
+
+            -- Update all elements
+            for _, el in ipairs(win.allElements) do
+                if el.type == "toggle" then
+                    local yPos = win.y + el.y + offsetY
+                    -- Check if visible
+                    if yPos > win.y + 40 and yPos < win.y + win.h - 30 then
+                        -- Update toggle visuals
+                        el:Update()
+                        -- Check interaction
+                        if clicked and isInRect(mx, my, win.x + win.w - 56, yPos, 36, 18) then
+                            el.state = not el.state
+                            if el.callback then el.callback(el.state) end
+                            saveConfig()
+                        end
+                    end
+                elseif el.type == "slider" then
+                    local yPos = win.y + el.y + offsetY
+                    if yPos > win.y + 40 and yPos < win.y + win.h - 30 then
+                        el:Update()
+                        local trackX = el.track.Position.X
+                        local trackW = el.track.Size.X
+                        if mouseDown and isInRect(mx, my, trackX, yPos + 14, trackW, 16) then
+                            el.dragging = true
+                        end
+                        if el.dragging and mouseDown then
+                            local relX = math.clamp(mx - trackX, 0, trackW)
+                            local rawVal = el.min + (relX / trackW) * (el.max - el.min)
+                            local val = math.round(rawVal / el.step) * el.step
+                            val = math.clamp(val, el.min, el.max)
+                            if val ~= el.value then
+                                el.value = val
+                                if el.callback then el.callback(el.value) end
+                                saveConfig()
+                            end
+                        end
+                        if not mouseDown then
+                            el.dragging = false
+                        end
+                    end
+                end
+            end
+
+            -- Scroll
+            local sUp = iskeypressed(0x21)
+            local sDown = iskeypressed(0x22)
+            if sUp then win.scrollOffset = math.max(win.scrollOffset - 20, -win.maxScroll) end
+            if sDown then win.scrollOffset = math.min(win.scrollOffset + 20, 0) end
+
+            -- Update scroll bar
+            local scrollPct = math.abs(win.scrollOffset) / math.max(win.maxScroll, 1)
+            local scrollY = win.y + 52 + (win.h - 80 - 40) * scrollPct
+            win.scrollFill.Position = Vector2.new(win.x + win.w - 20, scrollY)
+            win.scrollFill.Size = Vector2.new(4, 40)
+
+            -- Update window position
+            -- (all objects are drawn relative to win.x/win.y)
+
+            lastMouse = mouseDown
+            task.wait()
+        end
+    end)
+
+    return win
+end
 
 -- ============================================================
--- Game Logic (unchanged)
+-- Executor stubs (overridden by actual executor)
+-- ============================================================
+local function getMousePos()
+    local camera = workspace.CurrentCamera
+    if camera then
+        local mouse = game:GetService("Players").LocalPlayer:GetMouse()
+        if mouse then
+            return Vector2.new(mouse.X, mouse.Y)
+        end
+    end
+    return Vector2.new(0, 0)
+end
+
+local function iskeypressed(key)
+    return false
+end
+
+local function ismouse1pressed()
+    return false
+end
+
+-- ============================================================
+-- Create and Show UI
+-- ============================================================
+local win = UI:CreateWindow("Lurk", 480, 420)
+
+-- ============================================================
+-- GAME LOGIC (from your original script - unchanged)
 -- ============================================================
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
@@ -676,45 +1172,3 @@ task.spawn(function()
         task.wait(0.2)
     end
 end)
-
--- ============================================================
--- UI Toggles (using LurkUI library)
--- ============================================================
--- Combat
-killAuraCategory:Toggle("Enabled", settings.Killaura, function(state) settings.Killaura = state saveConfig() end)
-killAuraCategory:Toggle("Target Entities", settings.TargetEntities, function(state) settings.TargetEntities = state saveConfig() end)
-killAuraCategory:Toggle("Team Check", settings.TeamCheck, function(state) settings.TeamCheck = state saveConfig() end)
-killAuraCategory:Slider("Swing Range", settings.SwingRange, 1, 1, 28, function(value) settings.SwingRange = value saveConfig() end)
-killAuraCategory:Slider("Max Angle", settings.AngleValue, 1, 1, 360, function(value) settings.AngleValue = value saveConfig() end)
-killAuraCategory:Toggle("Require Mouse Down", settings.RequireMouseDown, function(state) settings.RequireMouseDown = state saveConfig() end)
-killAuraCategory:Toggle("No Swing", settings.NoSwing, function(state) settings.NoSwing = state saveConfig() end)
-killAuraCategory:Toggle("Face Target", settings.FaceTarget, function(state) settings.FaceTarget = state saveConfig() end)
-killAuraCategory:Toggle("Limit to Items", settings.LimitToItems, function(state) settings.LimitToItems = state saveConfig() end)
-killAuraCategory:Toggle("SwingOnly", settings.SwingOnly, function(state) settings.SwingOnly = state saveConfig() end)
-
--- Automation
-autoKitCategory:Toggle("Enabled", settings.AutoKit, function(state) settings.AutoKit = state saveConfig() end)
-autoKitCategory:Slider("Collection Range", settings.AutoKitRange, 5, 1, 20, function(value) settings.AutoKitRange = value saveConfig() end)
-
-autoVoidDropCategory:Toggle("Enabled", settings.AutoVoidDrop, function(state) settings.AutoVoidDrop = state saveConfig() end)
-autoVoidDropCategory:Toggle("Owl Check", settings.OwlCheck, function(state) settings.OwlCheck = state saveConfig() end)
-
--- ESP
-gameEsp:Toggle("Player ESP", settings.Player, function(state) settings.Player = state saveConfig() end)
-gameEsp:Toggle("Bed ESP", settings.Bed, function(state) settings.Bed = state saveConfig() end)
-gameEsp:Toggle("Entity ESP", settings.Entity, function(state) settings.Entity = state saveConfig() end)
-gameEsp:Toggle("Show Kit", settings.ShowKit, function(state) settings.ShowKit = state saveConfig() end)
-gameEsp:Toggle("Show Equipped", settings.ShowEquipped, function(state) settings.ShowEquipped = state saveConfig() end)
-
-kitEsp:Toggle("Metal ESP", settings.Metal, function(state) settings.Metal = state saveConfig() end)
-kitEsp:Toggle("Bee ESP", settings.Bee, function(state) settings.Bee = state saveConfig() end)
-kitEsp:Toggle("Eldertree ESP", settings.Eldertree, function(state) settings.Eldertree = state saveConfig() end)
-kitEsp:Toggle("Star ESP", settings.Star, function(state) settings.Star = state saveConfig() end)
-
-itemEsp:Toggle("Iron ESP", settings.iron, function(state) settings.iron = state saveConfig() end)
-itemEsp:Toggle("Diamond ESP", settings.diamond, function(state) settings.diamond = state saveConfig() end)
-itemEsp:Toggle("Emerald ESP", settings.emerald, function(state) settings.emerald = state saveConfig() end)
-itemEsp:Toggle("Show Amount", settings.Amount, function(state) settings.Amount = state saveConfig() end)
-
-espOptions:Toggle("Visible Only", settings.Visible, function(state) settings.Visible = state saveConfig() end)
-espOptions:Slider("Distance", settings.Distance, 100, 1, 2000, function(value) settings.Distance = value saveConfig() end)
