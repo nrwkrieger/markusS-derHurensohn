@@ -1,4 +1,3 @@
-
 local Lib = loadstring(game:HttpGet("https://raw.githubusercontent.com/nrwkrieger/markusS-derHurensohn/main/Libary/Lurk.lua"))() or LurkUI
 local HttpService = game:GetService("HttpService")
 
