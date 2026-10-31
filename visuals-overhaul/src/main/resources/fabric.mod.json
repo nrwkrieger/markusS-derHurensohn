@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "visuals-overhaul",
+  "version": "${version}",
+  "name": "Visuals Overhaul",
+  "description": "Visuelles Overhaul mit Glas-Settings-UI, Farbkurven, Nebel, Himmel, Wasser und Post-Processing.",
+  "authors": ["you"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["dev.visuals.overhaul.VisualsOverhaulClient"]
+  },
+  "depends": {
+    "fabricloader": ">=0.17.0",
+    "minecraft": "1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
